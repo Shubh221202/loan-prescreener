@@ -4,8 +4,8 @@ import streamlit as st
 # ----------------------------------------------------------------------------
 # CONFIG
 # ----------------------------------------------------------------------------
-# If Google retires this model name, change it here (e.g. to "gemini-2.0-flash").
-GEMINI_MODEL = "gemini-2.5-flash"
+# The app tries these models in order, so if Google retires one it falls back to the next.
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
 
 st.set_page_config(page_title="Loan Eligibility Pre-Screener", page_icon="🏦", layout="centered")
 
@@ -21,23 +21,29 @@ def call_gemini(prompt, system_instruction):
     """Returns (text, error). Never crashes the app if the API is down."""
     key = get_api_key()
     if not key:
-        return None, "No API key configured."
+        return None, "No API key found. Add GEMINI_API_KEY in the Streamlit Secrets box."
     try:
         from google import genai
         from google.genai import types
-
-        client = genai.Client(api_key=key)
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(system_instruction=system_instruction),
-        )
-        text = (response.text or "").strip()
-        if not text:
-            return None, "The AI returned an empty response."
-        return text, None
     except Exception as e:
-        return None, f"AI service unavailable ({type(e).__name__})."
+        return None, f"Library problem: {e}"
+
+    client = genai.Client(api_key=key)
+    last_error = "Unknown error."
+    for model in GEMINI_MODELS:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(system_instruction=system_instruction),
+            )
+            text = (response.text or "").strip()
+            if text:
+                return text, None
+            last_error = f"{model} returned an empty response."
+        except Exception as e:
+            last_error = f"{model}: {type(e).__name__}: {str(e)[:200]}"
+    return None, last_error
 
 
 # ----------------------------------------------------------------------------
@@ -48,7 +54,9 @@ EMPLOYMENT_TYPES = [
     "Salaried - Private",
     "Self-employed",
     "Gig/Contract",
+    "Pensioner (pension income)",
 ]
+PENSIONER = "Pensioner (pension income)"
 
 SAMPLES = {
     "-- Enter manually --": None,
@@ -58,6 +66,12 @@ SAMPLES = {
     "Borderline applicant (Neha Singh)": dict(
         name="Neha Singh", age=29, employment="Self-employed", income=60000,
         loan=800000, tenure=48, rate=12.0, credit=680, existing_emi=12000),
+    "Young applicant, age 19 (Ishita Rao)": dict(
+        name="Ishita Rao", age=19, employment="Gig/Contract", income=20000,
+        loan=100000, tenure=24, rate=14.0, credit=700, existing_emi=0),
+    "Pensioner (Meera Joshi)": dict(
+        name="Meera Joshi", age=67, employment=PENSIONER, income=45000,
+        loan=300000, tenure=36, rate=10.5, credit=750, existing_emi=0),
     "Weak applicant (Rohit Verma)": dict(
         name="Rohit Verma", age=26, employment="Gig/Contract", income=25000,
         loan=600000, tenure=36, rate=14.0, credit=540, existing_emi=9000),
@@ -81,8 +95,8 @@ def validate(d):
     errors = []
     if not d["name"].strip():
         errors.append("Applicant name is required.")
-    if not (18 <= d["age"] <= 70):
-        errors.append("Age must be between 18 and 70.")
+    if not (18 <= d["age"] <= 75):
+        errors.append("Age must be between 18 and 75.")
     if d["income"] <= 0:
         errors.append("Monthly income must be greater than zero.")
     if d["loan"] <= 0:
@@ -119,13 +133,22 @@ def score_applicant(d):
 
     # Employment (max 10)
     emp_pts = {"Salaried - Government/PSU": 10, "Salaried - Private": 8,
-               "Self-employed": 6, "Gig/Contract": 4}[d["employment"]]
+               "Self-employed": 6, "Gig/Contract": 4, PENSIONER: 7}[d["employment"]]
     factors.append(("Employment stability", emp_pts, 10, d["employment"]))
 
-    # Age (max 5)
+    # Age (max 5) - every age from 18 to 75 is covered explicitly
     a = d["age"]
-    pts = 5 if 25 <= a <= 55 else 3 if (21 <= a < 25 or 55 < a <= 60) else 1
-    factors.append(("Age band", pts, 5, f"Age {a}"))
+    if d["employment"] == PENSIONER:
+        pts, note = 5, f"Age {a} (pensioners are not penalised for age)"
+    elif 25 <= a <= 55:
+        pts, note = 5, f"Age {a} (prime earning years)"
+    elif 21 <= a <= 24 or 56 <= a <= 60:
+        pts, note = 3, f"Age {a}"
+    elif 18 <= a <= 20:
+        pts, note = 2, f"Age {a} (limited credit and income history)"
+    else:
+        pts, note = 1, f"Age {a} (close to or past retirement age)"
+    factors.append(("Age band", pts, 5, note))
 
     total = sum(f[1] for f in factors)
 
@@ -138,10 +161,14 @@ def score_applicant(d):
     if foir > 0.65:
         decision = "Reject"
         overrides.append("Total EMIs above 65% of income trigger automatic rejection.")
+    max_age = {PENSIONER: 75, "Self-employed": 70}.get(d["employment"], 65)
     age_at_maturity = d["age"] + d["tenure"] / 12
-    if age_at_maturity > 65 and decision == "Approve":
+    if age_at_maturity > max_age and decision == "Approve":
         decision = "Refer"
-        overrides.append(f"Applicant would be {age_at_maturity:.0f} at loan maturity (limit 65): referred for manual review.")
+        overrides.append(f"Applicant would be {age_at_maturity:.0f} at loan maturity (limit {max_age} for this employment type): referred for manual review.")
+    if d["age"] < 21 and decision == "Approve":
+        decision = "Refer"
+        overrides.append("Applicants under 21 cannot be auto-approved (limited credit history): referred for manual review.")
 
     return dict(emi=emi, foir=foir, lti=lti, factors=factors, total=total,
                 decision=decision, overrides=overrides)
@@ -193,83 +220,245 @@ def fallback_explanation(d, r):
 # ----------------------------------------------------------------------------
 # UI
 # ----------------------------------------------------------------------------
-st.title("🏦 Loan Eligibility Pre-Screener")
-st.caption("Rule-based credit scoring with an AI-written explanation. Demo project using made-up data.")
+import pandas as pd
 
-with st.expander("Privacy & disclaimer", expanded=False):
-    st.write(
-        "The applicant details you enter are used to compute the score locally, and a summary of the "
-        "result is sent to Google's Gemini API to generate the explanation. Do not enter real personal "
-        "or financial data. This tool is a pre-screening aid only and is not a credit decision or financial advice."
-    )
+# Indicative STARTING rates (% p.a.) compiled from published reports, Jan-Jul 2026
+# (RBI repo rate 5.25%). Actual rates depend on profile - always verify with the bank.
+RATES = {
+    "Home Loan": {"Union Bank of India": 7.35, "Bank of Baroda": 7.45, "Punjab National Bank": 7.45,
+                  "State Bank of India": 7.50, "ICICI Bank": 7.70, "Kotak Mahindra Bank": 7.70,
+                  "HDFC Bank": 7.90, "Axis Bank": 8.35},
+    "Personal Loan": {"Union Bank of India": 8.90, "Axis Bank": 9.60, "HDFC Bank": 9.99,
+                      "ICICI Bank": 9.99, "Central Bank of India": 11.25},
+    "Car Loan": {"Union Bank of India": 7.40, "Punjab National Bank": 7.50,
+                 "HDFC Bank": 8.20, "ICICI Bank": 8.50},
+}
+LOAN_INFO = {
+    "Home Loan": ("Buy, build or renovate a house or flat.", "Long tenure (up to 30 yrs), lowest rates, tax benefits on interest and principal.", True),
+    "Personal Loan": ("Unsecured money for any need: medical, wedding, travel, consolidation.", "No collateral, quick disbursal, but higher rates and shorter tenure (1-5 yrs).", True),
+    "Car Loan": ("Finance a new or used vehicle; the vehicle is the security.", "Up to ~90% of on-road price, tenure 3-7 yrs, rates between home and personal loans.", True),
+    "Education Loan": ("Fees, living costs and travel for study in India or abroad.", "Repayment starts after course + moratorium; interest may qualify for tax deduction. Rates vary by institute and bank.", False),
+    "Gold Loan": ("Borrow against gold jewellery for short-term needs.", "Very fast approval, minimal paperwork, rate depends on loan-to-value. Rates vary by lender.", False),
+    "Business Loan": ("Working capital or expansion funds for MSMEs and self-employed.", "Secured or unsecured, may need financial statements and GST returns. Rates vary widely.", False),
+}
+NEEDS = {"Buy a house / flat": "Home Loan", "Buy a car or bike": "Car Loan", "Medical, wedding or other personal need": "Personal Loan",
+         "Pay for studies": "Education Loan", "Quick cash against gold": "Gold Loan", "Grow my business": "Business Loan"}
+DOCS = {
+    "Everyone (KYC)": ["Aadhaar / Passport / Voter ID", "PAN card", "Recent passport-size photographs", "Address proof (utility bill, rent agreement)"],
+    "Salaried": ["Last 3 months' salary slips", "Last 6 months' bank statements", "Form 16 / ITR (last 2 years)", "Employment ID / offer letter"],
+    "Self-employed": ["ITR with computation of income (last 2-3 years)", "Business proof (GST registration, shop licence)", "Last 12 months' bank statements", "Balance sheet and P&L"],
+    "Pensioner": ["Pension Payment Order (PPO)", "Last 6 months' pension credit in bank statement", "ITR / Form 16A if applicable"],
+    "Home Loan": ["Sale agreement / allotment letter", "Property title documents and approved plan", "Builder NOC and payment receipts"],
+    "Personal Loan": ["Usually only KYC + income proof; some banks ask for a purpose statement"],
+    "Car Loan": ["Proforma invoice / dealer quotation", "Driving licence", "Down-payment receipt"],
+}
+EMP_DOCS = {"Salaried - Government/PSU": "Salaried", "Salaried - Private": "Salaried", "Self-employed": "Self-employed",
+            "Gig/Contract": "Self-employed", PENSIONER: "Pensioner"}
 
-choice = st.selectbox("Load a sample applicant", list(SAMPLES.keys()))
-vals = SAMPLES[choice] or DEFAULTS
 
-with st.form("applicant_form"):
-    c1, c2 = st.columns(2)
-    name = c1.text_input("Applicant name", value=vals["name"])
-    age = c2.number_input("Age", value=vals["age"], step=1)
-    employment = c1.selectbox("Employment type", EMPLOYMENT_TYPES, index=EMPLOYMENT_TYPES.index(vals["employment"]))
-    income = c2.number_input("Monthly income (INR)", value=float(vals["income"]), step=1000.0)
-    loan = c1.number_input("Loan amount (INR)", value=float(vals["loan"]), step=50000.0)
-    tenure = c2.number_input("Tenure (months)", value=vals["tenure"], step=6)
-    rate = c1.number_input("Interest rate (% p.a.)", value=float(vals["rate"]), step=0.5)
-    credit = c2.number_input("Credit score (300-900)", value=vals["credit"], step=10)
-    existing_emi = c1.number_input("Existing monthly EMIs (INR)", value=float(vals["existing_emi"]), step=500.0)
-    submitted = st.form_submit_button("Run pre-screening")
+def score_adj(credit):
+    return 0 if credit >= 750 else 0.5 if credit >= 700 else 1.5 if credit >= 650 else 3 if credit >= 600 else 5
 
-if submitted:
-    applicant = dict(name=name, age=age, employment=employment, income=income, loan=loan,
-                     tenure=tenure, rate=rate, credit=credit, existing_emi=existing_emi)
-    errs = validate(applicant)
-    if errs:
-        st.session_state.pop("result", None)
-        for e in errs:
-            st.error(e)
-    else:
-        result = score_applicant(applicant)
-        prompt = "Explain this pre-screening result:\n" + build_context(applicant, result)
-        text, err = call_gemini(prompt, EXPLAIN_SYSTEM)
-        st.session_state["result"] = dict(applicant=applicant, result=result,
-                                          explanation=text or fallback_explanation(applicant, result),
-                                          ai_error=err)
-        st.session_state["chat"] = []
 
-# Results persist in session_state, so they survive widget interactions
-if "result" in st.session_state:
-    s = st.session_state["result"]
+def est_rate(loan_type, credit):
+    return round(min(RATES[loan_type].values()) + score_adj(credit), 2)
+
+
+def recommend(d):
+    rows = []
+    for bank, base in RATES[d["type"]].items():
+        rate = base + score_adj(d["credit"])
+        emi = calc_emi(d["loan"], rate, d["tenure"])
+        rows.append({"Bank": bank, "Est. rate (% p.a.)": round(rate, 2), "Est. EMI (INR)": round(emi),
+                     "Total interest (INR)": round(emi * d["tenure"] - d["loan"])})
+    return pd.DataFrame(rows).sort_values("Est. EMI (INR)").reset_index(drop=True)
+
+
+def show_recommendations(s):
     d, r = s["applicant"], s["result"]
+    st.subheader(f"Recommended banks for your {d['type']}")
+    if r["decision"] == "Reject":
+        st.error("Based on this pre-screening, applying now is likely to be declined. Improve the weak areas "
+                 "(credit score, debt burden, loan size) and check again before applying.")
+        return
+    if r["decision"] == "Refer":
+        st.warning("Your profile needs manual review, so approval is not certain. Banks below are ranked by lowest EMI.")
+    st.dataframe(recommend(d), width="stretch", hide_index=True)
+    st.caption("Estimated rate = bank's published starting rate + a premium for your credit score band. "
+               "Indicative only; the bank sets the final rate.")
+    docs = DOCS["Everyone (KYC)"] + DOCS[EMP_DOCS[d["employment"]]] + DOCS[d["type"]]
+    with st.expander("Documents you will need"):
+        for x in docs:
+            st.write("- " + x)
 
+
+def show_result(s, prefix, show_qa):
+    d, r = s["applicant"], s["result"]
     st.divider()
-    st.subheader("Result")
     colour = {"Approve": "green", "Refer": "orange", "Reject": "red"}[r["decision"]]
     st.markdown(f"### :{colour}[{r['decision'].upper()}]  |  Score {r['total']}/100")
     m1, m2, m3 = st.columns(3)
-    m1.metric("New EMI", f"INR {r['emi']:,.0f}")
+    m1.metric("Est. EMI", f"INR {r['emi']:,.0f}")
     m2.metric("Debt burden (FOIR)", f"{r['foir']:.0%}")
     m3.metric("Loan / annual income", f"{r['lti']:.1f}x")
-
     for o in r["overrides"]:
         st.warning(o)
-
-    st.markdown("**Score drivers**")
-    for name_, pts, mx, note in r["factors"]:
-        st.progress(pts / mx, text=f"{name_}: {pts}/{mx} - {note}")
-
-    st.markdown("**Explanation**")
+    for n, pts, mx, note in r["factors"]:
+        st.progress(pts / mx, text=f"{n}: {pts}/{mx} - {note}")
     st.info(s["explanation"])
     if s["ai_error"]:
         st.caption(f"Note: {s['ai_error']} Showing a standard summary instead.")
+    show_recommendations(s)
+    if show_qa:
+        st.divider()
+        st.subheader("Ask a follow-up question")
+        with st.form(prefix + "qa", clear_on_submit=True):
+            q = st.text_input("Your question")
+            asked = st.form_submit_button("Ask")
+        if asked and q.strip():
+            ans, err = call_gemini(f"RESULT DATA:\n{build_context(d, r)}\n\nQUESTION: {q}", QA_SYSTEM)
+            st.session_state.setdefault("chat", []).append((q, ans or f"Sorry, the AI could not answer. Reason: {err}"))
+        for q_, a_ in reversed(st.session_state.get("chat", [])):
+            st.markdown(f"**You:** {q_}")
+            st.markdown(f"**Assistant:** {a_}")
 
-    st.divider()
-    st.subheader("Ask a follow-up question")
-    st.caption("Scope: this result and basic credit concepts only.")
-    q = st.text_input("Your question", key="qa_input")
-    if st.button("Ask") and q.strip():
-        qa_prompt = f"RESULT DATA:\n{build_context(d, r)}\n\nQUESTION: {q}"
-        ans, err = call_gemini(qa_prompt, QA_SYSTEM)
-        st.session_state["chat"].append((q, ans or f"Sorry, the AI service is unavailable ({err})"))
-    for question, answer in reversed(st.session_state.get("chat", [])):
-        st.markdown(f"**You:** {question}")
-        st.markdown(f"**Assistant:** {answer}")
+
+def eligibility_ui(prefix, show_qa=False):
+    choice = st.selectbox("Load a sample applicant", list(SAMPLES), key=prefix + "sample")
+    v = SAMPLES[choice] or DEFAULTS
+    k = lambda n: f"{prefix}|{choice}|{n}"
+    pref = st.session_state.get("lt_pref", "Personal Loan")
+    with st.form(prefix + "form"):
+        c1, c2 = st.columns(2)
+        ltype = c1.selectbox("Loan type", list(RATES), index=list(RATES).index(pref), key=k("type"))
+        name = c2.text_input("Applicant name", value=v["name"], key=k("name"))
+        age = c1.number_input("Age", value=v["age"], step=1, key=k("age"))
+        emp = c2.selectbox("Employment / income type", EMPLOYMENT_TYPES, index=EMPLOYMENT_TYPES.index(v["employment"]), key=k("emp"))
+        income = c1.number_input("Monthly income (INR)", value=float(v["income"]), step=1000.0, key=k("inc"))
+        loan = c2.number_input("Loan amount (INR)", value=float(v["loan"]), step=50000.0, key=k("loan"))
+        tenure = c1.number_input("Tenure (months)", value=v["tenure"], step=6, key=k("ten"))
+        credit = c2.number_input("Credit score (300-900)", value=v["credit"], step=10, key=k("cs"),
+                                 help="Type in your score. This app does not fetch it from any credit bureau.")
+        emi_ex = c1.number_input("Existing monthly EMIs (INR)", value=float(v["existing_emi"]), step=500.0, key=k("ex"))
+        go = st.form_submit_button("Check eligibility")
+    st.caption("No score? Get your free report from a bureau such as CIBIL, Experian, Equifax or CRIF High Mark.")
+    if go:
+        d = dict(name=name, age=age, employment=emp, income=income, loan=loan, tenure=tenure,
+                 rate=est_rate(ltype, credit), credit=credit, existing_emi=emi_ex, type=ltype)
+        errs = validate(d)
+        if errs:
+            st.session_state.pop("result", None)
+            for e in errs:
+                st.error(e)
+        else:
+            r = score_applicant(d)
+            text, err = call_gemini("Explain this pre-screening result:\n" + build_context(d, r), EXPLAIN_SYSTEM)
+            st.session_state["result"] = dict(applicant=d, result=r, ai_error=err,
+                                              explanation=text or fallback_explanation(d, r))
+            st.session_state["chat"] = []
+    if "result" in st.session_state:
+        show_result(st.session_state["result"], prefix, show_qa)
+
+
+@st.dialog("Check your loan eligibility", width="large")
+def eligibility_dialog():
+    eligibility_ui("dlg")
+
+
+def banner(page):
+    c1, c2 = st.columns([4, 1])
+    c1.info("Not sure you qualify? Find out in under a minute, free.")
+    if c2.button("Check eligibility", key="top_" + page, type="primary", width="stretch"):
+        eligibility_dialog()
+
+
+def page_loan_types():
+    st.title("Loan Types")
+    need = st.selectbox("What do you need money for?", list(NEEDS))
+    match = NEEDS[need]
+    for t, (what, feat, covered) in LOAN_INFO.items():
+        with st.expander(("Recommended for you: " if t == match else "") + t, expanded=(t == match)):
+            st.write(what)
+            st.write("**Key features:** " + feat)
+            if covered:
+                st.write(f"**Starting rates from:** {min(RATES[t].values())}% p.a. (indicative)")
+                if st.button(f"Check my eligibility for a {t}", key="lt_" + t):
+                    st.session_state["lt_pref"] = t
+                    eligibility_dialog()
+            else:
+                st.caption("Live eligibility check and bank comparison are not available for this loan type in this demo.")
+
+
+def page_emi():
+    st.title("EMI Calculator")
+    c1, c2, c3 = st.columns(3)
+    amt = c1.number_input("Loan amount (INR)", min_value=10000.0, value=1000000.0, step=50000.0)
+    rate = c2.number_input("Interest rate (% p.a.)", min_value=1.0, max_value=40.0, value=9.0, step=0.25)
+    months = c3.number_input("Tenure (months)", min_value=6, max_value=360, value=60, step=6)
+    emi = calc_emi(amt, rate, months)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Monthly EMI", f"INR {emi:,.0f}")
+    m2.metric("Total interest", f"INR {emi * months - amt:,.0f}")
+    m3.metric("Total payment", f"INR {emi * months:,.0f}")
+    bal, rows = amt, {}
+    for m in range(1, int(months) + 1):
+        interest = bal * rate / 1200
+        bal -= emi - interest
+        y = (m - 1) // 12 + 1
+        row = rows.setdefault(y, [0.0, 0.0])
+        row[0] += emi - interest
+        row[1] += interest
+    st.caption("Principal vs interest paid each year")
+    st.bar_chart(pd.DataFrame(rows, index=["Principal", "Interest"]).T)
+
+
+def page_rates():
+    st.title("Bank Interest Rates & Documents")
+    st.caption("Indicative starting rates (% p.a.) compiled from published reports, Jan-Jul 2026. RBI repo rate: 5.25%. "
+               "Your rate depends on credit score, income and loan size. Confirm with the bank before applying.")
+    tabs = st.tabs(list(RATES))
+    for tab, t in zip(tabs, RATES):
+        with tab:
+            df = pd.DataFrame(sorted(RATES[t].items(), key=lambda x: x[1]), columns=["Bank", "Starting rate (% p.a.)"])
+            st.dataframe(df, width="stretch", hide_index=True)
+            st.markdown("**Documents usually required**")
+            for grp in ["Everyone (KYC)", "Salaried", "Self-employed", "Pensioner", t]:
+                with st.expander(grp if grp != t else f"Specific to {t}"):
+                    for x in DOCS[grp]:
+                        st.write("- " + x)
+    st.caption("Document lists are typical across banks; each bank may ask for more.")
+
+
+def page_recommend():
+    st.title("Bank Recommendations")
+    if "result" in st.session_state:
+        show_recommendations(st.session_state["result"])
+    else:
+        st.info("Run the eligibility check first. We will rank banks for your needs.")
+    if st.button("Run / update my eligibility check", key="rec_btn"):
+        eligibility_dialog()
+
+
+# ----------------------------------------------------------------------------
+# NAVIGATION
+# ----------------------------------------------------------------------------
+PAGES = {"Loan Types": page_loan_types, "EMI Calculator": page_emi, "Bank Rates & Documents": page_rates,
+         "Check Eligibility": lambda: (st.title("Check Eligibility"), eligibility_ui("pg", show_qa=True)),
+         "Recommendations": page_recommend}
+
+st.sidebar.title("Loan Pre-Screener")
+st.sidebar.caption("Demo project. Use made-up data only.")
+page = st.sidebar.radio("Menu", list(PAGES))
+if st.sidebar.button("Check your eligibility", type="primary", width="stretch"):
+    eligibility_dialog()
+with st.sidebar.expander("Privacy & disclaimer"):
+    st.write("Scoring runs in this app; a summary of the result is sent to Google's Gemini API to write the "
+             "explanation. Do not enter real personal data. This is a pre-screening aid, not a credit decision "
+             "or financial advice.")
+
+if "welcomed" not in st.session_state:
+    st.session_state["welcomed"] = True
+    eligibility_dialog()
+if page != "Check Eligibility":
+    banner(page)
+PAGES[page]()
