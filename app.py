@@ -222,6 +222,30 @@ def fallback_explanation(d, r):
 # ----------------------------------------------------------------------------
 import pandas as pd
 
+st.markdown("""<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+html, body, [class*="css"] {font-family:'Inter',sans-serif;}
+#MainMenu, footer {visibility:hidden;}
+.block-container {padding-top:2rem; max-width:1100px;}
+.hero {background:linear-gradient(135deg,#4F46E5 0%,#06B6D4 100%); color:#fff; padding:2.4rem 2rem; border-radius:24px; margin-bottom:1.2rem; box-shadow:0 12px 30px rgba(79,70,229,.25);}
+.hero h1 {color:#fff; font-size:2.3rem; font-weight:800; margin:0 0 .5rem 0; line-height:1.15;}
+.hero p {font-size:1.05rem; opacity:.95; margin:0;}
+.mini {background:linear-gradient(90deg,#EEF2FF,#ECFEFF); border:1px solid #C7D2FE; border-radius:14px; padding:.8rem 1rem; font-weight:600; color:#3730A3;}
+.card {background:#fff; border:1px solid #E5E7EB; border-radius:20px; padding:1.2rem; box-shadow:0 2px 8px rgba(15,23,42,.05); transition:all .2s ease; height:100%;}
+.card:hover {transform:translateY(-5px); box-shadow:0 14px 28px rgba(79,70,229,.18); border-color:#818CF8;}
+.card.match {border:2px solid #4F46E5; background:linear-gradient(180deg,#fff,#EEF2FF);}
+.card .ic {font-size:2rem;} .card h4 {margin:.3rem 0; font-weight:800;}
+.card .rate {color:#4F46E5; font-weight:800; font-size:1.15rem;} .card small {color:#64748B;}
+.big {font-size:2rem; font-weight:800; color:#4F46E5;}
+.step {background:#fff; border-radius:20px; padding:1.2rem; border:1px solid #E5E7EB; text-align:center; height:100%;}
+.step .n {width:42px; height:42px; line-height:42px; border-radius:50%; background:linear-gradient(135deg,#4F46E5,#06B6D4); color:#fff; font-weight:800; margin:0 auto .6rem auto;}
+.badge {display:inline-block; padding:.35rem 1rem; border-radius:999px; color:#fff; font-weight:800; letter-spacing:.05em;}
+div.stButton > button, div[data-testid="stFormSubmitButton"] > button {border-radius:12px; font-weight:700; padding:.55rem 1rem; transition:all .15s ease;}
+div.stButton > button:hover {transform:translateY(-2px); box-shadow:0 6px 14px rgba(79,70,229,.25);}
+[data-testid="stSidebar"] {background:linear-gradient(180deg,#EEF2FF 0%,#ECFEFF 100%);}
+[data-testid="stMetric"] {background:#fff; border:1px solid #E5E7EB; border-radius:16px; padding:.8rem 1rem; box-shadow:0 2px 6px rgba(15,23,42,.04);}
+</style>""", unsafe_allow_html=True)
+
 # Indicative STARTING rates (% p.a.) compiled from published reports, Jan-Jul 2026
 # (RBI repo rate 5.25%). Actual rates depend on profile - always verify with the bank.
 RATES = {
@@ -295,8 +319,16 @@ def show_recommendations(s):
 def show_result(s, prefix, show_qa):
     d, r = s["applicant"], s["result"]
     st.divider()
-    colour = {"Approve": "green", "Refer": "orange", "Reject": "red"}[r["decision"]]
-    st.markdown(f"### :{colour}[{r['decision'].upper()}]  |  Score {r['total']}/100")
+    colour = {"Approve": "#16A34A", "Refer": "#F59E0B", "Reject": "#DC2626"}[r["decision"]]
+    msg = {"Approve": "Looks like a strong application. Compare banks below.",
+           "Refer": "Borderline: a bank may ask for a manual review.",
+           "Reject": "Not ready yet. See what to improve below."}[r["decision"]]
+    g1, g2 = st.columns([1, 3])
+    g1.markdown(f"""<div style="width:130px;height:130px;border-radius:50%;background:conic-gradient({colour} {r['total']}%,#E5E7EB 0);display:flex;align-items:center;justify-content:center;">
+      <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+      <b style="font-size:1.9rem;line-height:1">{r['total']}</b><span style="color:#64748B;font-size:.8rem">out of 100</span></div></div>""", unsafe_allow_html=True)
+    g2.markdown(f"""<span class="badge" style="background:{colour}">{r['decision'].upper()}</span>
+      <h3 style="margin:.6rem 0 .2rem 0">{d['name']}'s {d['type']} pre-screening</h3><span style="color:#475569">{msg}</span>""", unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3)
     m1.metric("Est. EMI", f"INR {r['emi']:,.0f}")
     m2.metric("Debt burden (FOIR)", f"{r['foir']:.0%}")
@@ -365,51 +397,91 @@ def eligibility_dialog():
     eligibility_ui("dlg")
 
 
+def go(p):
+    st.session_state["nav"] = p
+
+
 def banner(page):
     c1, c2 = st.columns([4, 1])
-    c1.info("Not sure you qualify? Find out in under a minute, free.")
+    c1.markdown('<div class="mini">⚡ Not sure you qualify? Find out in under a minute, free.</div>', unsafe_allow_html=True)
     if c2.button("Check eligibility", key="top_" + page, type="primary", width="stretch"):
         eligibility_dialog()
 
 
+ICONS = {"Home Loan": "🏠", "Personal Loan": "💼", "Car Loan": "🚗", "Education Loan": "🎓", "Gold Loan": "🪙", "Business Loan": "📈"}
+
+
+def page_home():
+    st.markdown("""<div class="hero"><h1>Know your loan eligibility before you apply.</h1>
+    <p>Check your chances, compare bank rates, plan your EMI, and get matched with the right bank. Free and takes about a minute.</p></div>""", unsafe_allow_html=True)
+    if st.button("🚀 Check my eligibility now", type="primary", key="home_cta"):
+        eligibility_dialog()
+    st.write("")
+    c = st.columns(3)
+    stats = [("60 sec", "to get your pre-screening score"), (f"{min(RATES['Home Loan'].values())}%", "lowest home loan starting rate (indicative)"), ("3 loan types", "with live bank comparison")]
+    for col, (big, txt) in zip(c, stats):
+        col.markdown(f'<div class="card"><div class="big">{big}</div><small>{txt}</small></div>', unsafe_allow_html=True)
+    st.subheader("How it works")
+    c = st.columns(3)
+    steps = [("Tell us what you need", "Pick a loan type and enter income, loan amount and credit score."),
+             ("Get your score", "A transparent rule-based score plus a plain-English AI explanation."),
+             ("Compare banks", "See banks ranked by estimated EMI and the documents you will need.")]
+    for i, (col, (t, txt)) in enumerate(zip(c, steps), 1):
+        col.markdown(f'<div class="step"><div class="n">{i}</div><b>{t}</b><br><small>{txt}</small></div>', unsafe_allow_html=True)
+    st.subheader("Explore")
+    c = st.columns(3)
+    c[0].button("🧾 Browse loan types", on_click=go, args=("🧾 Loan Types",), width="stretch")
+    c[1].button("🧮 EMI calculator", on_click=go, args=("🧮 EMI Calculator",), width="stretch")
+    c[2].button("🏦 Compare bank rates", on_click=go, args=("🏦 Bank Rates & Docs",), width="stretch")
+
+
 def page_loan_types():
-    st.title("Loan Types")
-    need = st.selectbox("What do you need money for?", list(NEEDS))
+    st.title("🧾 Loan Types")
+    need = st.pills("What do you need money for?", list(NEEDS), default=list(NEEDS)[0], selection_mode="single") or list(NEEDS)[0]
     match = NEEDS[need]
-    for t, (what, feat, covered) in LOAN_INFO.items():
-        with st.expander(("Recommended for you: " if t == match else "") + t, expanded=(t == match)):
-            st.write(what)
-            st.write("**Key features:** " + feat)
-            if covered:
-                st.write(f"**Starting rates from:** {min(RATES[t].values())}% p.a. (indicative)")
-                if st.button(f"Check my eligibility for a {t}", key="lt_" + t):
-                    st.session_state["lt_pref"] = t
-                    eligibility_dialog()
-            else:
-                st.caption("Live eligibility check and bank comparison are not available for this loan type in this demo.")
+    st.success(f"Best fit for you: **{match}**")
+    items = list(LOAN_INFO.items())
+    for row in range(0, len(items), 3):
+        cols = st.columns(3)
+        for col, (t, (what, feat, covered)) in zip(cols, items[row:row + 3]):
+            rate = f"From {min(RATES[t].values())}% p.a." if covered else "Rates vary by bank"
+            with col:
+                st.markdown(f'<div class="card {"match" if t == match else ""}"><div class="ic">{ICONS[t]}</div><h4>{t}</h4>'
+                            f'<div class="rate">{rate}</div><p style="margin:.4rem 0">{what}</p></div>', unsafe_allow_html=True)
+                with st.expander("More details"):
+                    st.write(feat)
+                if covered:
+                    if st.button("Check my eligibility", key="lt_" + t, type="primary" if t == match else "secondary", width="stretch"):
+                        st.session_state["lt_pref"] = t
+                        eligibility_dialog()
+                else:
+                    st.caption("Live check not available in this demo.")
 
 
 def page_emi():
-    st.title("EMI Calculator")
+    st.title("🧮 EMI Calculator")
     c1, c2, c3 = st.columns(3)
-    amt = c1.number_input("Loan amount (INR)", min_value=10000.0, value=1000000.0, step=50000.0)
-    rate = c2.number_input("Interest rate (% p.a.)", min_value=1.0, max_value=40.0, value=9.0, step=0.25)
-    months = c3.number_input("Tenure (months)", min_value=6, max_value=360, value=60, step=6)
+    amt = c1.slider("Loan amount (INR)", 50000, 20000000, 1000000, 50000)
+    rate = c2.slider("Interest rate (% p.a.)", 5.0, 20.0, 9.0, 0.1)
+    years = c3.slider("Tenure (years)", 1, 30, 5)
+    months = years * 12
     emi = calc_emi(amt, rate, months)
+    total = emi * months
+    st.markdown(f'<div class="hero" style="padding:1.4rem 2rem"><p>Your monthly EMI</p><h1>INR {emi:,.0f}</h1></div>', unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3)
-    m1.metric("Monthly EMI", f"INR {emi:,.0f}")
-    m2.metric("Total interest", f"INR {emi * months - amt:,.0f}")
-    m3.metric("Total payment", f"INR {emi * months:,.0f}")
+    m1.metric("Principal", f"INR {amt:,.0f}")
+    m2.metric("Total interest", f"INR {total - amt:,.0f}")
+    m3.metric("Total payment", f"INR {total:,.0f}")
+    st.progress((total - amt) / total, text=f"Interest is {(total - amt) / total:.0%} of everything you will pay")
     bal, rows = amt, {}
-    for m in range(1, int(months) + 1):
+    for m in range(1, months + 1):
         interest = bal * rate / 1200
         bal -= emi - interest
-        y = (m - 1) // 12 + 1
-        row = rows.setdefault(y, [0.0, 0.0])
+        row = rows.setdefault((m - 1) // 12 + 1, [0.0, 0.0])
         row[0] += emi - interest
         row[1] += interest
     st.caption("Principal vs interest paid each year")
-    st.bar_chart(pd.DataFrame(rows, index=["Principal", "Interest"]).T)
+    st.bar_chart(pd.DataFrame(rows, index=["Principal", "Interest"]).T, color=["#4F46E5", "#06B6D4"])
 
 
 def page_rates():
@@ -420,7 +492,8 @@ def page_rates():
     for tab, t in zip(tabs, RATES):
         with tab:
             df = pd.DataFrame(sorted(RATES[t].items(), key=lambda x: x[1]), columns=["Bank", "Starting rate (% p.a.)"])
-            st.dataframe(df, width="stretch", hide_index=True)
+            df["Tag"] = ["🏆 Lowest"] + [""] * (len(df) - 1)
+            st.dataframe(df, width="stretch", hide_index=True, column_config={"Starting rate (% p.a.)": st.column_config.ProgressColumn("Starting rate (% p.a.)", format="%.2f%%", min_value=0, max_value=12)})
             st.markdown("**Documents usually required**")
             for grp in ["Everyone (KYC)", "Salaried", "Self-employed", "Pensioner", t]:
                 with st.expander(grp if grp != t else f"Specific to {t}"):
@@ -442,14 +515,15 @@ def page_recommend():
 # ----------------------------------------------------------------------------
 # NAVIGATION
 # ----------------------------------------------------------------------------
-PAGES = {"Loan Types": page_loan_types, "EMI Calculator": page_emi, "Bank Rates & Documents": page_rates,
-         "Check Eligibility": lambda: (st.title("Check Eligibility"), eligibility_ui("pg", show_qa=True)),
-         "Recommendations": page_recommend}
+PAGES = {"🏠 Home": page_home, "🧾 Loan Types": page_loan_types, "🧮 EMI Calculator": page_emi,
+         "🏦 Bank Rates & Docs": page_rates,
+         "✅ Check Eligibility": lambda: (st.title("✅ Check Eligibility"), eligibility_ui("pg", show_qa=True)),
+         "⭐ Recommendations": page_recommend}
 
-st.sidebar.title("Loan Pre-Screener")
-st.sidebar.caption("Demo project. Use made-up data only.")
-page = st.sidebar.radio("Menu", list(PAGES))
-if st.sidebar.button("Check your eligibility", type="primary", width="stretch"):
+st.sidebar.markdown("## 🏦 LoanWise")
+st.sidebar.caption("Loan pre-screener. Demo project, use made-up data only.")
+page = st.sidebar.radio("Menu", list(PAGES), key="nav", label_visibility="collapsed")
+if st.sidebar.button("🔔 Check your eligibility", type="primary", width="stretch"):
     eligibility_dialog()
 with st.sidebar.expander("Privacy & disclaimer"):
     st.write("Scoring runs in this app; a summary of the result is sent to Google's Gemini API to write the "
@@ -459,6 +533,6 @@ with st.sidebar.expander("Privacy & disclaimer"):
 if "welcomed" not in st.session_state:
     st.session_state["welcomed"] = True
     eligibility_dialog()
-if page != "Check Eligibility":
+if page not in ("🏠 Home", "✅ Check Eligibility"):
     banner(page)
 PAGES[page]()
