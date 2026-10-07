@@ -226,7 +226,7 @@ st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 html, body, [class*="css"] {font-family:'Inter',sans-serif; font-size:17px;}
 #MainMenu, footer {visibility:hidden;}
-.block-container {padding-top:1.5rem; padding-bottom:6rem; max-width:1100px;}
+.block-container {padding-top:4.5rem; padding-bottom:6rem; max-width:1100px;}
 .hero {background:linear-gradient(135deg,#4F46E5 0%,#06B6D4 100%); color:#fff; padding:2rem; border-radius:24px; margin-bottom:1rem; box-shadow:0 12px 30px rgba(79,70,229,.25);}
 .hero h1 {color:#fff; font-size:2.2rem; font-weight:800; margin:0 0 .4rem 0; line-height:1.15;}
 .hero p {font-size:1.1rem; opacity:.95; margin:0;}
@@ -446,6 +446,9 @@ def show_result(s, prefix):
         m1.metric("Est. EMI", f"INR {r['emi']:,.0f}")
         m2.metric("Debt burden (FOIR)", f"{r['foir']:.0%}")
         m3.metric("Loan / annual income", f"{r['lti']:.1f}x")
+        if r["decision"] != "Reject":
+            x = recommend(d).iloc[0]
+            st.success(f"🏆 Top bank pick: **{x['Bank']}** at about {x['Est. rate (% p.a.)']}% (EMI INR {x['Est. EMI (INR)']:,}). See the Best bank tab to compare all banks.")
         for o in r["overrides"]:
             st.warning(o)
         for n, pts, mx, note in r["factors"]:
@@ -650,19 +653,9 @@ def page_rates():
     st.caption("Document lists are typical across banks; each bank may ask for more.")
 
 
-def page_recommend():
-    header("Best Bank for You", "Based on your eligibility check.")
-    if "result" in ss:
-        banks_ui(ss["result"])
-    else:
-        st.info("Run the eligibility check first and we will pick the best bank for you.")
-    if st.button("Run / update my eligibility check", key="rec_btn", type="primary"):
-        eligibility_dialog()
-
-
-NAV = ["🏠 Home", "🧾 Loan Types", "🧮 EMI Calculator", "🏦 Bank Rates", "✅ Check Eligibility", "⭐ Best Bank"]
+NAV = ["🏠 Home", "🧾 Loan Types", "🧮 EMI Calculator", "🏦 Bank Rates", "✅ Check Eligibility"]
 PAGES = {NAV[0]: page_home, NAV[1]: page_loan_types, NAV[2]: page_emi, NAV[3]: page_rates,
-         NAV[4]: lambda: (header("Check Eligibility", "Three quick steps."), eligibility_ui("pg")), NAV[5]: page_recommend}
+         NAV[4]: lambda: (header("Check Eligibility", "Three quick steps."), eligibility_ui("pg"))}
 
 page = st.segmented_control("Menu", NAV, default=NAV[0], key="nav", label_visibility="collapsed") or NAV[0]
 PAGES[page]()
