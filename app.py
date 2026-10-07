@@ -224,26 +224,32 @@ import pandas as pd
 
 st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-html, body, [class*="css"] {font-family:'Inter',sans-serif;}
+html, body, [class*="css"] {font-family:'Inter',sans-serif; font-size:17px;}
 #MainMenu, footer {visibility:hidden;}
-.block-container {padding-top:2rem; max-width:1100px;}
-.hero {background:linear-gradient(135deg,#4F46E5 0%,#06B6D4 100%); color:#fff; padding:2.4rem 2rem; border-radius:24px; margin-bottom:1.2rem; box-shadow:0 12px 30px rgba(79,70,229,.25);}
-.hero h1 {color:#fff; font-size:2.3rem; font-weight:800; margin:0 0 .5rem 0; line-height:1.15;}
-.hero p {font-size:1.05rem; opacity:.95; margin:0;}
-.mini {background:linear-gradient(90deg,#EEF2FF,#ECFEFF); border:1px solid #C7D2FE; border-radius:14px; padding:.8rem 1rem; font-weight:600; color:#3730A3;}
+.block-container {padding-top:1.5rem; padding-bottom:6rem; max-width:1100px;}
+.hero {background:linear-gradient(135deg,#4F46E5 0%,#06B6D4 100%); color:#fff; padding:2rem; border-radius:24px; margin-bottom:1rem; box-shadow:0 12px 30px rgba(79,70,229,.25);}
+.hero h1 {color:#fff; font-size:2.2rem; font-weight:800; margin:0 0 .4rem 0; line-height:1.15;}
+.hero p {font-size:1.1rem; opacity:.95; margin:0;}
 .card {background:#fff; border:1px solid #E5E7EB; border-radius:20px; padding:1.2rem; box-shadow:0 2px 8px rgba(15,23,42,.05); transition:all .2s ease; height:100%;}
 .card:hover {transform:translateY(-5px); box-shadow:0 14px 28px rgba(79,70,229,.18); border-color:#818CF8;}
 .card.match {border:2px solid #4F46E5; background:linear-gradient(180deg,#fff,#EEF2FF);}
-.card .ic {font-size:2rem;} .card h4 {margin:.3rem 0; font-weight:800;}
-.card .rate {color:#4F46E5; font-weight:800; font-size:1.15rem;} .card small {color:#64748B;}
+.card .ic {font-size:2.2rem;} .card h4 {margin:.3rem 0; font-weight:800;}
+.card .rate {color:#4F46E5; font-weight:800; font-size:1.2rem;}
 .big {font-size:2rem; font-weight:800; color:#4F46E5;}
 .step {background:#fff; border-radius:20px; padding:1.2rem; border:1px solid #E5E7EB; text-align:center; height:100%;}
 .step .n {width:42px; height:42px; line-height:42px; border-radius:50%; background:linear-gradient(135deg,#4F46E5,#06B6D4); color:#fff; font-weight:800; margin:0 auto .6rem auto;}
 .badge {display:inline-block; padding:.35rem 1rem; border-radius:999px; color:#fff; font-weight:800; letter-spacing:.05em;}
-div.stButton > button, div[data-testid="stFormSubmitButton"] > button {border-radius:12px; font-weight:700; padding:.55rem 1rem; transition:all .15s ease;}
+.pick {background:linear-gradient(135deg,#ECFDF5,#ECFEFF); border:2px solid #10B981; border-radius:20px; padding:1.2rem;}
+div.stButton > button, div[data-testid="stFormSubmitButton"] > button {border-radius:12px; font-weight:700; font-size:1.05rem; padding:.6rem 1rem; transition:all .15s ease;}
 div.stButton > button:hover {transform:translateY(-2px); box-shadow:0 6px 14px rgba(79,70,229,.25);}
-[data-testid="stSidebar"] {background:linear-gradient(180deg,#EEF2FF 0%,#ECFEFF 100%);}
-[data-testid="stMetric"] {background:#fff; border:1px solid #E5E7EB; border-radius:16px; padding:.8rem 1rem; box-shadow:0 2px 6px rgba(15,23,42,.04);}
+div[data-testid="stButtonGroup"] button {padding:.7rem 1.1rem;}
+div[data-testid="stButtonGroup"] button p {font-size:1.15rem !important; font-weight:700 !important;}
+button[data-baseweb="tab"] p {font-size:1.05rem; font-weight:700;}
+[data-testid="stMetric"] {background:#fff; border:1px solid #E5E7EB; border-radius:16px; padding:.8rem 1rem;}
+.st-key-fab {position:fixed; bottom:84px; right:22px; z-index:1000; width:auto !important;}
+.st-key-fab button {background:linear-gradient(135deg,#4F46E5,#06B6D4); color:#fff; border:none; border-radius:999px; padding:.8rem 1.3rem; box-shadow:0 10px 24px rgba(79,70,229,.45); animation:pulse 2.4s infinite;}
+.st-key-fab button p {color:#fff; font-weight:800;}
+@keyframes pulse {0%{box-shadow:0 0 0 0 rgba(79,70,229,.5);} 70%{box-shadow:0 0 0 16px rgba(79,70,229,0);} 100%{box-shadow:0 0 0 0 rgba(79,70,229,0);}}
 </style>""", unsafe_allow_html=True)
 
 # Indicative STARTING rates (% p.a.) compiled from published reports, Jan-Jul 2026
@@ -280,6 +286,11 @@ EMP_DOCS = {"Salaried - Government/PSU": "Salaried", "Salaried - Private": "Sala
             "Gig/Contract": "Self-employed", PENSIONER: "Pensioner"}
 
 
+PSU = {"Union Bank of India", "Bank of Baroda", "Punjab National Bank", "State Bank of India", "Central Bank of India"}
+ICONS = {"Home Loan": "🏠", "Personal Loan": "💼", "Car Loan": "🚗", "Education Loan": "🎓", "Gold Loan": "🪙", "Business Loan": "📈"}
+ss = st.session_state
+
+
 def score_adj(credit):
     return 0 if credit >= 750 else 0.5 if credit >= 700 else 1.5 if credit >= 650 else 3 if credit >= 600 else 5
 
@@ -293,103 +304,244 @@ def recommend(d):
     for bank, base in RATES[d["type"]].items():
         rate = base + score_adj(d["credit"])
         emi = calc_emi(d["loan"], rate, d["tenure"])
-        rows.append({"Bank": bank, "Est. rate (% p.a.)": round(rate, 2), "Est. EMI (INR)": round(emi),
-                     "Total interest (INR)": round(emi * d["tenure"] - d["loan"])})
+        rows.append({"Bank": bank, "Type": "Public" if bank in PSU else "Private", "Est. rate (% p.a.)": round(rate, 2),
+                     "Est. EMI (INR)": round(emi), "Total interest (INR)": round(emi * d["tenure"] - d["loan"])})
     return pd.DataFrame(rows).sort_values("Est. EMI (INR)").reset_index(drop=True)
 
 
-def show_recommendations(s):
+def affordable(d):
+    r, n = d["rate"] / 1200, d["tenure"]
+    cap = max(0, 0.40 * d["income"] - d["existing_emi"])
+    return cap * ((1 + r) ** n - 1) / (r * (1 + r) ** n)
+
+
+def tips(d, r):
+    out = []
+    if d["credit"] < 750:
+        out.append(f"📈 **Raise your credit score** (now {d['credit']}; 750+ gets the best rates). Pay every EMI and card bill on time, keep card usage under 30% of the limit, avoid applying to many lenders at once, and check your credit report for errors.")
+    if r["foir"] > 0.40:
+        out.append(f"💳 **Reduce your debt burden.** EMIs would take {r['foir']:.0%} of your income (lenders prefer under 40-50%). Close small loans, clear card balances, or choose a longer tenure.")
+    if r["lti"] > 3:
+        out.append(f"💰 **Borrow less or add income.** The loan is {r['lti']:.1f}x your annual income. Try a lower amount, a bigger down payment, or a co-applicant with income.")
+    if d["age"] < 21:
+        out.append("👪 **Add a co-applicant or guarantor.** At your age banks see limited credit history.")
+    if d["employment"] in ("Gig/Contract", "Self-employed"):
+        out.append("🧾 **Show stable income.** Keep 12+ months of bank statements and 2 years of ITR ready; steady deposits matter.")
+    if not out:
+        out.append("✅ Your profile looks strong. Compare offers, and negotiate the rate and processing fee.")
+    return out
+
+
+def offline_answer(q, d, r):
+    t = q.lower()
+    if any(k in t for k in ("why", "reject", "approve", "refer")):
+        w = min(r["factors"], key=lambda f: f[1] / f[2])
+        return f"Your score is {r['total']}/100 ({r['decision']}). The weakest area is {w[0].lower()}: {w[3]}."
+    if any(k in t for k in ("foir", "debt burden")):
+        return f"FOIR is the share of monthly income that goes to EMIs. Yours would be {r['foir']:.0%}; lenders like it under 40-50%."
+    if "emi" in t:
+        return f"Your estimated EMI is INR {r['emi']:,.0f} per month for {d['tenure']} months."
+    if any(k in t for k in ("credit score", "cibil", "score")):
+        return f"Your score is {d['credit']}. 750+ usually gets the best rates. Pay dues on time, keep card usage under 30% and avoid many loan enquiries at once."
+    if any(k in t for k in ("document", "paper")):
+        return "Typical documents: " + "; ".join(DOCS["Everyone (KYC)"] + DOCS[EMP_DOCS[d["employment"]]] + DOCS[d["type"]]) + "."
+    if any(k in t for k in ("improve", "fix", "increase", "better", "chance")):
+        return "\n\n".join(tips(d, r))
+    if any(k in t for k in ("bank", "recommend", "best", "rate")):
+        x = recommend(d).iloc[0]
+        return f"Lowest estimated EMI: {x['Bank']} at about {x['Est. rate (% p.a.)']}% (EMI INR {x['Est. EMI (INR)']:,})."
+    return "I could not reach the AI right now. Try asking about EMI, FOIR, credit score, documents, improving your chances, or which bank is best."
+
+
+def linked(label, lo, hi, default, step, key, fmt):
+    """A number box and a slider that stay in sync: type a value OR drag."""
+    ks, kn = key + "_s", key + "_n"
+    ss.setdefault(ks, default)
+    ss.setdefault(kn, default)
+    def from_s(): ss[kn] = ss[ks]
+    def from_n(): ss[ks] = min(max(ss[kn], lo), hi)
+    st.number_input(label, min_value=lo, max_value=hi, step=step, key=kn, on_change=from_n, format=fmt)
+    st.slider(label, lo, hi, step=step, key=ks, on_change=from_s, label_visibility="collapsed")
+    return ss[kn]
+
+
+def tenure_input(key, default_months):
+    unit = st.radio("Tenure in", ["Years", "Months"], horizontal=True, key=key + "_u")
+    if unit == "Years":
+        yrs = st.number_input("Tenure (years)", 0.5, 30.0, round(default_months / 12 * 2) / 2, 0.5, format="%.1f", key=key + "_y")
+        months = int(round(yrs * 12))
+    else:
+        months = int(st.number_input("Tenure (months)", 6, 360, int(default_months), 1, key=key + "_m"))
+    st.caption(f"= **{months} months** ({months // 12} yrs {months % 12} mo)")
+    return months
+
+
+def header(title, sub=""):
+    st.markdown(f'<div class="hero" style="padding:1.3rem 2rem"><h1 style="font-size:1.9rem">{title}</h1><p>{sub}</p></div>', unsafe_allow_html=True)
+
+
+def banks_ui(s):
     d, r = s["applicant"], s["result"]
-    st.subheader(f"Recommended banks for your {d['type']}")
     if r["decision"] == "Reject":
-        st.error("Based on this pre-screening, applying now is likely to be declined. Improve the weak areas "
-                 "(credit score, debt burden, loan size) and check again before applying.")
+        st.error("Applying right now is likely to be declined, so we are not recommending a bank yet. Use the 'Fix before applying' tab, then check again.")
         return
+    df = recommend(d)
+    x = df.iloc[0]
+    note = ("Public-sector banks often have lower rates but can take longer to process." if x["Type"] == "Public"
+            else "Private banks usually process faster, sometimes at a slightly higher rate.")
+    st.markdown(f'<div class="pick"><b>🏆 Our top pick for your {d["type"]}</b><h2 style="margin:.3rem 0">{x["Bank"]}</h2>'
+                f'Est. rate <b>{x["Est. rate (% p.a.)"]}%</b> &nbsp;|&nbsp; Est. EMI <b>INR {x["Est. EMI (INR)"]:,}</b> &nbsp;|&nbsp; '
+                f'Total interest <b>INR {x["Total interest (INR)"]:,}</b><br><small>Why: lowest estimated EMI for your profile. {note}</small></div>', unsafe_allow_html=True)
     if r["decision"] == "Refer":
-        st.warning("Your profile needs manual review, so approval is not certain. Banks below are ranked by lowest EMI.")
-    st.dataframe(recommend(d), width="stretch", hide_index=True)
-    st.caption("Estimated rate = bank's published starting rate + a premium for your credit score band. "
-               "Indicative only; the bank sets the final rate.")
-    docs = DOCS["Everyone (KYC)"] + DOCS[EMP_DOCS[d["employment"]]] + DOCS[d["type"]]
-    with st.expander("Documents you will need"):
-        for x in docs:
-            st.write("- " + x)
+        st.warning("Your profile needs manual review, so approval is not certain.")
+    st.write("")
+    st.dataframe(df, width="stretch", hide_index=True)
+    st.caption("Estimated rate = bank's published starting rate + a premium for your credit score band. Indicative only; the bank sets the final rate.")
 
 
-def show_result(s, prefix, show_qa):
+def after_apply_ui(r):
+    steps = [("1. Apply and KYC", "Submit the form and documents. Day 0."),
+             ("2. Credit check and verification", "The bank pulls your credit report (a 'hard enquiry') and verifies income and employment. 1-3 days."),
+             ("3. Appraisal", "The bank decides the amount, rate and tenure; may ask for more documents or, for a home loan, a property valuation. 3-7 days or more."),
+             ("4. Sanction letter", "You receive the approved amount, rate, fees and conditions. Read it before accepting."),
+             ("5. Agreement and disbursal", "Sign the loan agreement; money is released to you or the seller. EMIs begin next cycle.")]
+    for t, txt in steps:
+        st.markdown(f"**{t}**  \n{txt}")
+    note = {"Approve": "Your profile is strong, so expect a smooth process. Still, do not apply to many banks at once: every application is a hard enquiry that can dip your score.",
+            "Refer": "Expect follow-up questions. The bank may ask for a co-applicant, a lower amount or extra income proof. Prepare these in advance.",
+            "Reject": "If you apply now, a rejection is likely and stays on your credit report as an enquiry. Fix the weak areas first."}[r["decision"]]
+    st.info(note)
+
+
+def chat_ui(prefix, d, r):
+    def ask(q):
+        ans, _ = call_gemini(f"RESULT DATA:\n{build_context(d, r)}\n\nQUESTION: {q}", QA_SYSTEM)
+        ss.setdefault("chat", []).append((q, ans or offline_answer(q, d, r)))
+    st.caption("Tap a question or type your own:")
+    c = st.columns(3)
+    for col, q in zip(c, ["How can I improve my chances?", "What is FOIR?", "Which documents do I need?"]):
+        col.button(q, key=prefix + q, on_click=ask, args=(q,), width="stretch")
+    with st.form(prefix + "qa", clear_on_submit=True):
+        st.text_input("Your question", key=prefix + "q")
+        st.form_submit_button("Ask", on_click=lambda: ss[prefix + "q"].strip() and ask(ss[prefix + "q"]))
+    for q_, a_ in reversed(ss.get("chat", [])):
+        st.chat_message("user").write(q_)
+        st.chat_message("assistant").write(a_)
+
+
+def show_result(s, prefix):
     d, r = s["applicant"], s["result"]
-    st.divider()
     colour = {"Approve": "#16A34A", "Refer": "#F59E0B", "Reject": "#DC2626"}[r["decision"]]
-    msg = {"Approve": "Looks like a strong application. Compare banks below.",
-           "Refer": "Borderline: a bank may ask for a manual review.",
-           "Reject": "Not ready yet. See what to improve below."}[r["decision"]]
+    msg = {"Approve": "Looks like a strong application.", "Refer": "Borderline: a bank may ask for a manual review.",
+           "Reject": "Not ready yet. See what to improve."}[r["decision"]]
     g1, g2 = st.columns([1, 3])
     g1.markdown(f"""<div style="width:130px;height:130px;border-radius:50%;background:conic-gradient({colour} {r['total']}%,#E5E7EB 0);display:flex;align-items:center;justify-content:center;">
       <div style="width:100px;height:100px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;">
       <b style="font-size:1.9rem;line-height:1">{r['total']}</b><span style="color:#64748B;font-size:.8rem">out of 100</span></div></div>""", unsafe_allow_html=True)
     g2.markdown(f"""<span class="badge" style="background:{colour}">{r['decision'].upper()}</span>
       <h3 style="margin:.6rem 0 .2rem 0">{d['name']}'s {d['type']} pre-screening</h3><span style="color:#475569">{msg}</span>""", unsafe_allow_html=True)
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Est. EMI", f"INR {r['emi']:,.0f}")
-    m2.metric("Debt burden (FOIR)", f"{r['foir']:.0%}")
-    m3.metric("Loan / annual income", f"{r['lti']:.1f}x")
-    for o in r["overrides"]:
-        st.warning(o)
-    for n, pts, mx, note in r["factors"]:
-        st.progress(pts / mx, text=f"{n}: {pts}/{mx} - {note}")
-    st.info(s["explanation"])
-    if s["ai_error"]:
-        st.caption(f"Note: {s['ai_error']} Showing a standard summary instead.")
-    show_recommendations(s)
-    if show_qa:
-        st.divider()
-        st.subheader("Ask a follow-up question")
-        with st.form(prefix + "qa", clear_on_submit=True):
-            q = st.text_input("Your question")
-            asked = st.form_submit_button("Ask")
-        if asked and q.strip():
-            ans, err = call_gemini(f"RESULT DATA:\n{build_context(d, r)}\n\nQUESTION: {q}", QA_SYSTEM)
-            st.session_state.setdefault("chat", []).append((q, ans or f"Sorry, the AI could not answer. Reason: {err}"))
-        for q_, a_ in reversed(st.session_state.get("chat", [])):
-            st.markdown(f"**You:** {q_}")
-            st.markdown(f"**Assistant:** {a_}")
+    t1, t2, t3, t4, t5 = st.tabs(["📊 Result", "🏆 Best bank", "🛠️ Fix before applying", "📋 After you apply", "💬 Ask a question"])
+    with t1:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Est. EMI", f"INR {r['emi']:,.0f}")
+        m2.metric("Debt burden (FOIR)", f"{r['foir']:.0%}")
+        m3.metric("Loan / annual income", f"{r['lti']:.1f}x")
+        for o in r["overrides"]:
+            st.warning(o)
+        for n, pts, mx, note in r["factors"]:
+            st.progress(pts / mx, text=f"{n}: {pts}/{mx} - {note}")
+        st.info(s["explanation"])
+        if s["ai_error"]:
+            st.caption(f"AI note: {s['ai_error']} Showing a standard summary instead.")
+    with t2:
+        banks_ui(s)
+    with t3:
+        st.markdown("#### What to work on before you approach a bank")
+        for t in tips(d, r):
+            st.markdown(t)
+        cap = affordable(d)
+        st.success(f"With your income and existing EMIs, a comfortable loan (EMIs within 40% of income) is up to **INR {cap:,.0f}** over {d['tenure']} months.")
+    with t4:
+        after_apply_ui(r)
+        with st.expander("Documents you will need"):
+            for x in DOCS["Everyone (KYC)"] + DOCS[EMP_DOCS[d["employment"]]] + DOCS[d["type"]]:
+                st.write("- " + x)
+    with t5:
+        chat_ui(prefix, d, r)
 
 
-def eligibility_ui(prefix, show_qa=False):
-    choice = st.selectbox("Load a sample applicant", list(SAMPLES), key=prefix + "sample")
-    v = SAMPLES[choice] or DEFAULTS
-    k = lambda n: f"{prefix}|{choice}|{n}"
-    pref = st.session_state.get("lt_pref", "Personal Loan")
-    with st.form(prefix + "form"):
-        c1, c2 = st.columns(2)
-        ltype = c1.selectbox("Loan type", list(RATES), index=list(RATES).index(pref), key=k("type"))
-        name = c2.text_input("Applicant name", value=v["name"], key=k("name"))
-        age = c1.number_input("Age", value=v["age"], step=1, key=k("age"))
-        emp = c2.selectbox("Employment / income type", EMPLOYMENT_TYPES, index=EMPLOYMENT_TYPES.index(v["employment"]), key=k("emp"))
-        income = c1.number_input("Monthly income (INR)", value=float(v["income"]), step=1000.0, key=k("inc"))
-        loan = c2.number_input("Loan amount (INR)", value=float(v["loan"]), step=50000.0, key=k("loan"))
-        tenure = c1.number_input("Tenure (months)", value=v["tenure"], step=6, key=k("ten"))
-        credit = c2.number_input("Credit score (300-900)", value=v["credit"], step=10, key=k("cs"),
-                                 help="Type in your score. This app does not fetch it from any credit bureau.")
-        emi_ex = c1.number_input("Existing monthly EMIs (INR)", value=float(v["existing_emi"]), step=500.0, key=k("ex"))
-        go = st.form_submit_button("Check eligibility")
-    st.caption("No score? Get your free report from a bureau such as CIBIL, Experian, Equifax or CRIF High Mark.")
-    if go:
-        d = dict(name=name, age=age, employment=emp, income=income, loan=loan, tenure=tenure,
-                 rate=est_rate(ltype, credit), credit=credit, existing_emi=emi_ex, type=ltype)
-        errs = validate(d)
-        if errs:
-            st.session_state.pop("result", None)
-            for e in errs:
-                st.error(e)
-        else:
-            r = score_applicant(d)
-            text, err = call_gemini("Explain this pre-screening result:\n" + build_context(d, r), EXPLAIN_SYSTEM)
-            st.session_state["result"] = dict(applicant=d, result=r, ai_error=err,
-                                              explanation=text or fallback_explanation(d, r))
-            st.session_state["chat"] = []
-    if "result" in st.session_state:
-        show_result(st.session_state["result"], prefix, show_qa)
+def eligibility_ui(prefix):
+    S = lambda n: f"{prefix}_{n}"
+    ss.setdefault(S("A"), dict(DEFAULTS, type=ss.get("lt_pref", "Personal Loan"), tenure=60))
+    ss.setdefault(S("step"), 1)
+    ss.setdefault(S("ver"), 0)
+    A, ver = ss[S("A")], ss[S("ver")]
+    W = lambda n: f"{prefix}{ver}_{n}"
+
+    def goto(step): ss[S("step")] = step
+    def pick(t): A["type"] = t; ss[S("step")] = 2
+    def sample():
+        v = SAMPLES[ss[S("smp")]]
+        if v:
+            ss[S("A")] = dict(v, type=A["type"]); ss[S("ver")] += 1; ss[S("step")] = 2
+    def restart(): ss.pop(S("A"), None); ss[S("step")] = 1; ss[S("ver")] += 1
+
+    step = ss[S("step")]
+    slot = st.empty()
+    with slot.container():
+        if step <= 3:
+            st.progress(step / 3, text=f"Step {step} of 3: " + ["What do you need?", "About you", "The loan"][step - 1])
+        if step == 1:
+            st.markdown("#### What kind of loan are you looking for?")
+            cols = st.columns(3)
+            for col, t in zip(cols, RATES):
+                col.button(f"{ICONS[t]} {t}", key=S("t" + t), on_click=pick, args=(t,), width="stretch",
+                           type="primary" if A["type"] == t else "secondary")
+            st.selectbox("Or try a sample applicant", list(SAMPLES), key=S("smp"), on_change=sample)
+        elif step == 2:
+            st.markdown(f"#### Tell us about you ({A['type']})")
+            c1, c2 = st.columns(2)
+            A["name"] = c1.text_input("Your name", A["name"], key=W("name"))
+            A["age"] = c2.number_input("Age", 18, 75, int(A["age"]), 1, key=W("age"))
+            A["employment"] = c1.selectbox("Employment / income type", EMPLOYMENT_TYPES, index=EMPLOYMENT_TYPES.index(A["employment"]), key=W("emp"))
+            A["income"] = c2.number_input("Monthly income (INR)", 0, 10_000_000, int(A["income"]), 5000, key=W("inc"))
+            A["existing_emi"] = c1.number_input("Existing monthly EMIs (INR)", 0, 5_000_000, int(A["existing_emi"]), 500, key=W("ex"))
+            b1, b2 = st.columns(2)
+            b1.button("← Back", key=W("b2"), on_click=goto, args=(1,), width="stretch")
+            b2.button("Next →", key=W("n2"), on_click=goto, args=(3,), type="primary", width="stretch")
+        elif step == 3:
+            st.markdown("#### About the loan")
+            c1, c2 = st.columns(2)
+            with c1:
+                A["loan"] = linked("Loan amount (INR)", 10000, 100_000_000, int(A["loan"]), 10000, W("loan"), "%d")
+                A["tenure"] = tenure_input(W("ten"), A["tenure"])
+            with c2:
+                A["credit"] = linked("Credit score (300-900)", 300, 900, int(A["credit"]), 10, W("cs"), "%d")
+                st.caption("Type your score or drag. We do not fetch it from any bureau; get a free report from CIBIL, Experian, Equifax or CRIF High Mark.")
+            b1, b2 = st.columns(2)
+            b1.button("← Back", key=W("b3"), on_click=goto, args=(2,), width="stretch")
+            go = b2.button("See my result 🎯", key=W("go"), type="primary", width="stretch")
+            if go:
+                d = dict(A, name=A["name"].strip() or "Applicant", rate=est_rate(A["type"], A["credit"]))
+                errs = validate(d)
+                for e in errs:
+                    st.error(e + " (use Back to fix)")
+                if not errs:
+                    r = score_applicant(d)
+                    text, err = call_gemini("Explain this pre-screening result:\n" + build_context(d, r), EXPLAIN_SYSTEM)
+                    ss["result"] = dict(applicant=d, result=r, ai_error=err, explanation=text or fallback_explanation(d, r))
+                    ss["chat"] = []
+                    ss[S("step")] = 4
+                    step = 4
+                    if r["decision"] == "Approve":
+                        st.balloons()
+        if step == 4:
+            pass
+    if step == 4:
+        slot.empty()
+        if "result" in ss:
+            show_result(ss["result"], prefix)
+        st.button("🔄 Check another applicant", key=S("again"), on_click=restart)
 
 
 @st.dialog("Check your loan eligibility", width="large")
@@ -397,53 +549,47 @@ def eligibility_dialog():
     eligibility_ui("dlg")
 
 
-def go(p):
-    st.session_state["nav"] = p
+def start_check(t):
+    ss["lt_pref"] = t
+    for p in ("dlg", "pg"):
+        ss[p + "_A"] = dict(DEFAULTS, type=t, tenure=60)
+        ss[p + "_step"] = 2
+        ss[p + "_ver"] = ss.get(p + "_ver", 0) + 1
 
 
-def banner(page):
-    c1, c2 = st.columns([4, 1])
-    c1.markdown('<div class="mini">⚡ Not sure you qualify? Find out in under a minute, free.</div>', unsafe_allow_html=True)
-    if c2.button("Check eligibility", key="top_" + page, type="primary", width="stretch"):
-        eligibility_dialog()
-
-
-ICONS = {"Home Loan": "🏠", "Personal Loan": "💼", "Car Loan": "🚗", "Education Loan": "🎓", "Gold Loan": "🪙", "Business Loan": "📈"}
+def go(p): ss["nav"] = p
 
 
 def page_home():
     st.markdown("""<div class="hero"><h1>Know your loan eligibility before you apply.</h1>
-    <p>Check your chances, compare bank rates, plan your EMI, and get matched with the right bank. Free and takes about a minute.</p></div>""", unsafe_allow_html=True)
+    <p>Check your chances, compare bank rates, plan your EMI and find the right bank. Free, about a minute.</p></div>""", unsafe_allow_html=True)
     if st.button("🚀 Check my eligibility now", type="primary", key="home_cta"):
         eligibility_dialog()
     st.write("")
-    c = st.columns(3)
     stats = [("60 sec", "to get your pre-screening score"), (f"{min(RATES['Home Loan'].values())}%", "lowest home loan starting rate (indicative)"), ("3 loan types", "with live bank comparison")]
-    for col, (big, txt) in zip(c, stats):
-        col.markdown(f'<div class="card"><div class="big">{big}</div><small>{txt}</small></div>', unsafe_allow_html=True)
+    for col, (big, txt) in zip(st.columns(3), stats):
+        col.markdown(f'<div class="card"><div class="big">{big}</div>{txt}</div>', unsafe_allow_html=True)
     st.subheader("How it works")
-    c = st.columns(3)
-    steps = [("Tell us what you need", "Pick a loan type and enter income, loan amount and credit score."),
-             ("Get your score", "A transparent rule-based score plus a plain-English AI explanation."),
-             ("Compare banks", "See banks ranked by estimated EMI and the documents you will need.")]
-    for i, (col, (t, txt)) in enumerate(zip(c, steps), 1):
-        col.markdown(f'<div class="step"><div class="n">{i}</div><b>{t}</b><br><small>{txt}</small></div>', unsafe_allow_html=True)
+    steps = [("Tell us what you need", "Pick a loan type and answer 3 quick steps."),
+             ("Get your score", "A transparent score plus a plain-English explanation."),
+             ("Fix and compare", "See what to improve, then the best bank for you.")]
+    for i, (col, (t, txt)) in enumerate(zip(st.columns(3), steps), 1):
+        col.markdown(f'<div class="step"><div class="n">{i}</div><b>{t}</b><br>{txt}</div>', unsafe_allow_html=True)
     st.subheader("Explore")
     c = st.columns(3)
     c[0].button("🧾 Browse loan types", on_click=go, args=("🧾 Loan Types",), width="stretch")
     c[1].button("🧮 EMI calculator", on_click=go, args=("🧮 EMI Calculator",), width="stretch")
-    c[2].button("🏦 Compare bank rates", on_click=go, args=("🏦 Bank Rates & Docs",), width="stretch")
+    c[2].button("🏦 Compare bank rates", on_click=go, args=("🏦 Bank Rates",), width="stretch")
 
 
 def page_loan_types():
-    st.title("🧾 Loan Types")
+    header("Loan Types", "Pick what you need money for and we will show the best fit.")
     need = st.pills("What do you need money for?", list(NEEDS), default=list(NEEDS)[0], selection_mode="single") or list(NEEDS)[0]
     match = NEEDS[need]
     st.success(f"Best fit for you: **{match}**")
     items = list(LOAN_INFO.items())
     for row in range(0, len(items), 3):
-        cols = st.columns(3)
-        for col, (t, (what, feat, covered)) in zip(cols, items[row:row + 3]):
+        for col, (t, (what, feat, covered)) in zip(st.columns(3), items[row:row + 3]):
             rate = f"From {min(RATES[t].values())}% p.a." if covered else "Rates vary by bank"
             with col:
                 st.markdown(f'<div class="card {"match" if t == match else ""}"><div class="ic">{ICONS[t]}</div><h4>{t}</h4>'
@@ -452,22 +598,24 @@ def page_loan_types():
                     st.write(feat)
                 if covered:
                     if st.button("Check my eligibility", key="lt_" + t, type="primary" if t == match else "secondary", width="stretch"):
-                        st.session_state["lt_pref"] = t
+                        start_check(t)
                         eligibility_dialog()
                 else:
                     st.caption("Live check not available in this demo.")
 
 
 def page_emi():
-    st.title("🧮 EMI Calculator")
+    header("EMI Calculator", "Type a value or drag the slider. Both work.")
     c1, c2, c3 = st.columns(3)
-    amt = c1.slider("Loan amount (INR)", 50000, 20000000, 1000000, 50000)
-    rate = c2.slider("Interest rate (% p.a.)", 5.0, 20.0, 9.0, 0.1)
-    years = c3.slider("Tenure (years)", 1, 30, 5)
-    months = years * 12
+    with c1:
+        amt = linked("Loan amount (INR)", 50000, 20_000_000, 1_000_000, 50000, "emi_amt", "%d")
+    with c2:
+        rate = linked("Interest rate (% p.a.)", 5.0, 20.0, 9.0, 0.1, "emi_rate", "%.2f")
+    with c3:
+        months = tenure_input("emi_ten", 60)
     emi = calc_emi(amt, rate, months)
     total = emi * months
-    st.markdown(f'<div class="hero" style="padding:1.4rem 2rem"><p>Your monthly EMI</p><h1>INR {emi:,.0f}</h1></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="hero" style="padding:1.2rem 2rem"><p>Your monthly EMI</p><h1>INR {emi:,.0f}</h1></div>', unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3)
     m1.metric("Principal", f"INR {amt:,.0f}")
     m2.metric("Total interest", f"INR {total - amt:,.0f}")
@@ -485,7 +633,7 @@ def page_emi():
 
 
 def page_rates():
-    st.title("Bank Interest Rates & Documents")
+    header("Bank Rates & Documents", "Compare starting rates and see what each loan needs.")
     st.caption("Indicative starting rates (% p.a.) compiled from published reports, Jan-Jul 2026. RBI repo rate: 5.25%. "
                "Your rate depends on credit score, income and loan size. Confirm with the bank before applying.")
     tabs = st.tabs(list(RATES))
@@ -503,36 +651,25 @@ def page_rates():
 
 
 def page_recommend():
-    st.title("Bank Recommendations")
-    if "result" in st.session_state:
-        show_recommendations(st.session_state["result"])
+    header("Best Bank for You", "Based on your eligibility check.")
+    if "result" in ss:
+        banks_ui(ss["result"])
     else:
-        st.info("Run the eligibility check first. We will rank banks for your needs.")
-    if st.button("Run / update my eligibility check", key="rec_btn"):
+        st.info("Run the eligibility check first and we will pick the best bank for you.")
+    if st.button("Run / update my eligibility check", key="rec_btn", type="primary"):
         eligibility_dialog()
 
 
-# ----------------------------------------------------------------------------
-# NAVIGATION
-# ----------------------------------------------------------------------------
-PAGES = {"🏠 Home": page_home, "🧾 Loan Types": page_loan_types, "🧮 EMI Calculator": page_emi,
-         "🏦 Bank Rates & Docs": page_rates,
-         "✅ Check Eligibility": lambda: (st.title("✅ Check Eligibility"), eligibility_ui("pg", show_qa=True)),
-         "⭐ Recommendations": page_recommend}
+NAV = ["🏠 Home", "🧾 Loan Types", "🧮 EMI Calculator", "🏦 Bank Rates", "✅ Check Eligibility", "⭐ Best Bank"]
+PAGES = {NAV[0]: page_home, NAV[1]: page_loan_types, NAV[2]: page_emi, NAV[3]: page_rates,
+         NAV[4]: lambda: (header("Check Eligibility", "Three quick steps."), eligibility_ui("pg")), NAV[5]: page_recommend}
 
-st.sidebar.markdown("## 🏦 LoanWise")
-st.sidebar.caption("Loan pre-screener. Demo project, use made-up data only.")
-page = st.sidebar.radio("Menu", list(PAGES), key="nav", label_visibility="collapsed")
-if st.sidebar.button("🔔 Check your eligibility", type="primary", width="stretch"):
-    eligibility_dialog()
-with st.sidebar.expander("Privacy & disclaimer"):
-    st.write("Scoring runs in this app; a summary of the result is sent to Google's Gemini API to write the "
-             "explanation. Do not enter real personal data. This is a pre-screening aid, not a credit decision "
-             "or financial advice.")
-
-if "welcomed" not in st.session_state:
-    st.session_state["welcomed"] = True
-    eligibility_dialog()
-if page not in ("🏠 Home", "✅ Check Eligibility"):
-    banner(page)
+page = st.segmented_control("Menu", NAV, default=NAV[0], key="nav", label_visibility="collapsed") or NAV[0]
 PAGES[page]()
+
+with st.expander("Privacy & disclaimer"):
+    st.write("Scoring runs in this app; a summary of the result is sent to Google's Gemini API to write the explanation. "
+             "Do not enter real personal data. This is a pre-screening aid, not a credit decision or financial advice.")
+with st.container(key="fab"):
+    if st.button("🔔 Check eligibility", key="fab_btn"):
+        eligibility_dialog()
