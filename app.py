@@ -7,7 +7,7 @@ import streamlit as st
 # The app tries these models in order, so if Google retires one it falls back to the next.
 GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
 
-st.set_page_config(page_title="Loan Eligibility Pre-Screener", page_icon="🏦", layout="centered")
+st.set_page_config(page_title="Loan Eligibility Pre-Screener", page_icon="🏦", layout="centered", initial_sidebar_state="expanded")
 
 
 def get_api_key():
@@ -246,6 +246,10 @@ div[data-testid="stButtonGroup"] button {padding:.7rem 1.1rem;}
 div[data-testid="stButtonGroup"] button p {font-size:1.15rem !important; font-weight:700 !important;}
 button[data-baseweb="tab"] p {font-size:1.05rem; font-weight:700;}
 [data-testid="stMetric"] {background:#fff; border:1px solid #E5E7EB; border-radius:16px; padding:.8rem 1rem;}
+[data-testid="stSidebar"] {background:linear-gradient(180deg,#EEF2FF 0%,#ECFEFF 100%); min-width:300px;}
+[data-testid="stSidebar"] [data-testid="stRadio"] label {padding:.55rem .8rem; border-radius:12px; margin-bottom:.2rem; transition:all .15s ease;}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {background:#fff; transform:translateX(4px);}
+[data-testid="stSidebar"] [data-testid="stRadio"] label p {font-size:1.25rem !important; font-weight:700 !important;}
 .st-key-fab {position:fixed; bottom:84px; right:22px; z-index:1000; width:auto !important;}
 .st-key-fab button {background:linear-gradient(135deg,#4F46E5,#06B6D4); color:#fff; border:none; border-radius:999px; padding:.8rem 1.3rem; box-shadow:0 10px 24px rgba(79,70,229,.45); animation:pulse 2.4s infinite;}
 .st-key-fab button p {color:#fff; font-weight:800;}
@@ -657,7 +661,9 @@ NAV = ["🏠 Home", "🧾 Loan Types", "🧮 EMI Calculator", "🏦 Bank Rates",
 PAGES = {NAV[0]: page_home, NAV[1]: page_loan_types, NAV[2]: page_emi, NAV[3]: page_rates,
          NAV[4]: lambda: (header("Check Eligibility", "Three quick steps."), eligibility_ui("pg"))}
 
-page = st.segmented_control("Menu", NAV, default=NAV[0], key="nav", label_visibility="collapsed") or NAV[0]
+st.sidebar.markdown("## 🏦 LoanWise")
+st.sidebar.caption("Loan eligibility pre-screener. Demo project, use made-up data only.")
+page = st.sidebar.radio("Menu", NAV, key="nav", label_visibility="collapsed")
 PAGES[page]()
 
 with st.expander("Privacy & disclaimer"):
